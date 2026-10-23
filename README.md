@@ -20,7 +20,7 @@ psql "$DATABASE_URL" -f schema.sql
 Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`, `journal`, `dives`. Katalog artefak ada di tabel `artifacts` agar nanti logika server konsisten dengan `ARTIFACTS` di `game.js`.
 
 ## Roadmap (dikembangkan harian via cronjob)
-- [ ] Prestige / level penyelam
+- [x] Prestige / level penyelam
 - [ ] Event spesial per zona & boss makhluk laut
 - [ ] Leaderboard lokal
 - [ ] Migrasi localStorage → API backend (pemakaian schema.sql)

@@ -74,6 +74,37 @@ function upgradeCost(u) {
   return Math.round(u.baseCost * Math.pow(u.growth, level));
 }
 
+// ---------- Prestige / Level Penyelam ----------
+// Syarat: koin >= PRESTIGE_REQ(level). Prestige reset koin, energi, upgrade,
+// inventaris & kedalaman, tapi memberi +PERMANEN bonus temuan & kedalaman aman.
+const PRESTIGE_BASE_REQ = 2000;
+const PRESTIGE_REQ_MULT = 2.5;
+
+function prestigeReq() {
+  return Math.round(PRESTIGE_BASE_REQ * Math.pow(PRESTIGE_REQ_MULT, S.prestige));
+}
+
+function prestigeBonus() {
+  return S.prestige * 0.10; // +10% nilai jual per level
+}
+
+function canPrestige() {
+  return S.coins >= prestigeReq();
+}
+
+function doPrestige() {
+  if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1 };
+  const bonus = keep.prestige;
+  S = defaultState(S.name);
+  S.day = keep.day;
+  S.prestige = keep.prestige;
+  S.safeDepth += S.prestige * 20;        // bonus permanen: +20 m / level
+  S.findsPerDive += S.prestige;          // bonus permanen: +1 temuan / level
+  addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
+  save(); renderAll();
+}
+
 // ---------- Dive ----------
 const EVENTS_GOOD = [
   'Arus tenang membawamu ke kantong udara tersembunyi — oksigen terisi kembali.',
@@ -177,21 +208,25 @@ function sleep() {
 }
 
 // ---------- Market ----------
+function sellPrice(art) {
+  return Math.round(art.value * (1 + prestigeBonus()));
+}
 function sellItem(id, qty) {
   const art = ARTIFACTS.find(a => a.id === id);
   const have = S.inventory[id] || 0;
   const sell = Math.min(qty || have, have);
   if (!sell) return;
   S.inventory[id] -= sell;
-  S.coins += art.value * sell;
-  addLog(`Menjual ${sell}× ${art.name} (+${fmt(art.value * sell)} koin).`);
+  const gained = sellPrice(art) * sell;
+  S.coins += gained;
+  addLog(`Menjual ${sell}× ${art.name} (+${fmt(gained)} koin).`);
   save(); renderAll();
 }
 function sellAll() {
   let total = 0;
   for (const id in S.inventory) {
     const art = ARTIFACTS.find(a => a.id === id);
-    total += art.value * S.inventory[id];
+    total += sellPrice(art) * S.inventory[id];
     delete S.inventory[id];
   }
   if (total > 0) { S.coins += total; addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
@@ -212,7 +247,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;
@@ -220,6 +255,17 @@ function renderStatus() {
   $('st-energy').textContent = `${S.energy}/${S.maxEnergy}`;
   $('st-depth').textContent = fmt(S.deepest);
   $('st-day').textContent = S.day;
+  $('st-prestige').textContent = `Lv.${S.prestige}`;
+}
+
+function renderPrestige() {
+  const req = prestigeReq();
+  const ok = canPrestige();
+  $('prestige-box').innerHTML = `
+    <div class="item-row">
+      <div>Level sekarang: <b>Lv.${S.prestige}</b> — syarat berikutnya: <b>${fmt(req)} koin</b> (kamu punya ${fmt(S.coins)})</div>
+      <button class="btn ${ok ? '' : 'secondary'}" onclick="doPrestige()" ${ok ? '' : 'disabled'}>Naik Level</button>
+    </div>`;
 }
 
 function renderDive() {

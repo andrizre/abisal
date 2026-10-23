@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABISAL — Game Penyelam Laut Dalam</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>ABISAL</h1>
+  <p class="tagline">Turun ke gelap. Naik dengan harta. Jangan biarkan laut menyimpanmu.</p>
+</header>
+
+<main id="app">
+  <!-- Status bar -->
+  <section id="status-bar" class="panel">
+    <div class="stat"><span class="label">Nama</span><span id="st-name">—</span></div>
+    <div class="stat"><span class="label">Koin</span><span id="st-coins">0</span> 🪙</div>
+    <div class="stat"><span class="label">Energi</span><span id="st-energy">0/0</span></div>
+    <div class="stat"><span class="label">Kedalaman Maks</span><span id="st-depth">0</span> m</div>
+    <div class="stat"><span class="label">Hari</span><span id="st-day">1</span></div>
+  </section>
+
+  <nav id="tabs">
+    <button data-tab="dive" class="active">🌊 Menyelam</button>
+    <button data-tab="market">🏪 Pasar</button>
+    <button data-tab="upgrades">🔧 Upgrade</button>
+    <button data-tab="log">📜 Jurnal</button>
+  </nav>
+
+  <!-- DIVE -->
+  <section id="tab-dive" class="tab active">
+    <div class="panel">
+      <h2>Menara Penyelaman</h2>
+      <p id="dive-info">Pilih kedalaman target lalu mulai turun. Makin dalam, makin berharga — makin berbahaya.</p>
+      <div id="depth-options"></div>
+      <div id="dive-progress" class="hidden">
+        <div class="depth-meter"><div id="depth-fill"></div></div>
+        <p id="depth-text">0 m</p>
+        <div id="dive-actions"></div>
+      </div>
+      <div id="dive-events"></div>
+    </div>
+  </section>
+
+  <!-- MARKET -->
+  <section id="tab-market" class="tab">
+    <div class="panel">
+      <h2>Pasar Pelabuhan</h2>
+      <p>Jual artefak yang kamu angkat dari laut.</p>
+      <div id="inventory"></div>
+      <button id="sell-all" class="btn">Jual Semua</button>
+    </div>
+  </section>
+
+  <!-- UPGRADES -->
+  <section id="tab-upgrades" class="tab">
+    <div class="panel">
+      <h2>Bengko Kapal</h2>
+      <div id="upgrades-list"></div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section id="tab-log" class="tab">
+    <div class="panel">
+      <h2>Jurnal Penyelam</h2>
+      <div id="log-list"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <button id="btn-newgame" class="btn danger">Mulai Ulang</button>
+  <span class="muted">ABISAL v0.1 — progress tersimpan otomatis di browser ini.</span>
+</footer>
+
+<script src="game.js"></script>
+</body>
+</html>

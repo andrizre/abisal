@@ -79,5 +79,11 @@ INSERT INTO artifacts (id, name, min_depth, value) VALUES
   ('emas_ingot','Batang Emas Korban',100,320),
   ('ikon_air','Ikon Air Kuno',200,700),
   ('teropong_sirine','Teropong Sirine',200,1100),
-  ('jantung_abisal','Jantung Abisal',400,3000)
+  ('jantung_abisal','Jantung Abisal',400,3000),
+  ('topi_kapten','Topi Kapten Tenggelam',NULL,600),
+  ('sisik_baja','Sisik Baja Ular Laut',NULL,1100),
+  ('mata_abisal','Mata Sang Abisal',NULL,3500)
 ON CONFLICT (id) DO NOTHING;
+
+-- Artefak spesial (hadiah boss) tidak punya kedalaman minimum — hanya dari boss.
+ALTER TABLE artifacts ALTER COLUMN min_depth DROP NOT NULL;

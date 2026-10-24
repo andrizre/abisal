@@ -18,12 +18,32 @@ const ARTIFACTS = [
   { id: 'jantung_abisal',name: 'Jantung Abisal',      minDepth: 400, value: 3000 },
 ];
 
+// Zona dengan field `boss` punya boss makhluk laut & event spesial sendiri.
+const SPECIAL_ARTIFACTS = [
+  { id: 'topi_kapten', name: 'Topi Kapten Tenggelam', value: 600 },
+  { id: 'sisik_baja',  name: 'Sisik Baja Ular Laut',  value: 1100 },
+  { id: 'mata_abisal', name: 'Mata Sang Abisal',      value: 3500 },
+];
+
 const ZONES = [
-  { name: 'Dangkalan Matahari', depth: 30 },
-  { name: 'Reruntuhan Amfora', depth: 80 },
-  { name: 'Lorong Kapal Karam', depth: 160 },
-  { name: 'Palung Sisa', depth: 300 },
-  { name: 'Zona Abisal', depth: 500 },
+  { name: 'Dangkalan Matahari', depth: 30,
+    specialGood: ['Kepiting peraksi menyeret kaleng penuh koin ke kakimu.'],
+    specialBad: ['Lumpur hisap dangkal menelan kakimu sesaat.'] },
+  { name: 'Reruntuhan Amfora', depth: 80,
+    specialGood: ['Di antara amfora pecah, kamu menemukan relikui yang masih utuh.'],
+    specialBad: ['Rak amfora runtuh dan nyaris menghimpit setelanmu.'] },
+  { name: 'Lorong Kapal Karam', depth: 160,
+    specialGood: ['Lorong kapal karam menuntunmu ke kabin kapten — peti besinya masih tertutup.'],
+    specialBad: ['Pintu lorong berderit lalu mengunci — kamu merobek sedikit selang oksigen.'],
+    boss: { id: 'kapten_tenggelam', name: 'Kapten Tenggelam', reward: 'topi_kapten', coin: 250 } },
+  { name: 'Palung Sisa', depth: 300,
+    specialGood: ['Binar kuning dari celah palung menerangi koloni emas.'],
+    specialBad: ['Palung "bernapas" — gelombang tekanan menjentik tubuhmu ke dinding.'],
+    boss: { id: 'ular_baja', name: 'Ular Laut Kepala Baja', reward: 'sisik_baja', coin: 450 } },
+  { name: 'Zona Abisal', depth: 500,
+    specialGood: ['Cahaya organik abisal menyala di sekelilingmu seperti perayaan.'],
+    specialBad: ['Keheningan mencekam — sesuatu yang sangat besar sedang mendekat.'],
+    boss: { id: 'sang_abisal', name: 'Sang Abisal', reward: 'mata_abisal', coin: 1200 } },
 ];
 
 const UPGRADES = [
@@ -33,6 +53,8 @@ const UPGRADES = [
   { id: 'tool',   name: 'Alat Angkat',     desc: '+1 temuan per selam',       baseCost: 400, growth: 2.2, effect: s => s.findsPerDive += 1 },
   { id: 'reel',   name: 'Neraca Naik',     desc: 'Naik lebih aman (-15% risiko)', baseCost: 350, growth: 2.1, effect: s => s.safety += 0.15 },
 ];
+
+const ALL_ARTIFACTS = ARTIFACTS.concat(SPECIAL_ARTIFACTS);
 
 // ---------- State ----------
 let S = null;
@@ -130,14 +152,33 @@ function startDive(targetDepth) {
   renderDiveFrame();
 }
 
+function zoneOf(depth) {
+  return ZONES.find(z => z.depth === depth);
+}
+
 function diveTick() {
   const d = S._dive; if (!d) return;
+  const zone = zoneOf(d.targetDepth);
   d.progress += Math.min(d.targetDepth, 10 + Math.floor(Math.random() * 15));
   S.deepest = Math.max(S.deepest, d.progress);
 
+  // Boss encounter: saat mencapai dasar zona yang punya boss, sekali per selam
+  if (zone?.boss && !d.bossDone && d.progress >= d.targetDepth) {
+    d.bossDone = true;
+    return bossEncounter(zone.boss);
+  }
+
   // chance of event each tick
   if (Math.random() < 0.35) {
-    if (Math.random() < (0.45 + S.luck)) {
+    // 30% event spesial zona (jika ada), sisanya event umum
+    if (zone && zone.specialGood && Math.random() < 0.3) {
+      const good = Math.random() < (0.55 + S.luck);
+      showEvent(rnd(good ? zone.specialGood : zone.specialBad), good ? 'good' : 'bad');
+      if (!good) {
+        S.energy = Math.max(0, S.energy - 10);
+        if (S.energy <= 0) return finishDive(true);
+      }
+    } else if (Math.random() < (0.45 + S.luck)) {
       showEvent(rnd(EVENTS_GOOD), 'good');
     } else {
       showEvent(rnd(EVENTS_BAD), 'bad');
@@ -148,9 +189,29 @@ function diveTick() {
   renderDiveFrame();
 }
 
+// ---------- Boss makhluk laut ----------
+function bossEncounter(boss) {
+  const power = S.maxEnergy / 100 + S.prestige; // kekuatan penyelam
+  const winChance = Math.min(0.9, 0.25 + power * 0.15);
+  if (Math.random() < winChance) {
+    S.inventory[boss.reward] = (S.inventory[boss.reward] || 0) + 1;
+    S.coins += boss.coin;
+    showEvent(`⚔️ <b>${boss.name}</b> bangkit dari gelap... dan KALAH! Kamu mengangkat <b>${boss.name}'s relic</b> + ${fmt(boss.coin)} koin.`, 'good');
+    addLog(`⚔️ Mengalahkan boss <b>${boss.name}</b>! Hadiah: artefak spesial + ${fmt(boss.coin)} koin.`, 'good');
+  } else {
+    const lost = Math.round(boss.coin * 0.4);
+    S.energy = Math.max(0, S.energy - 30);
+    showEvent(`🩸 <b>${boss.name}</b> terlalu kuat! Kamu terpental, kehilangan ${lost} koin dan banyak oksigen.`, 'bad');
+    S.coins = Math.max(0, S.coins - lost);
+    addLog(`Kalah dari boss <b>${boss.name}</b> di dasar zona. (-${fmt(lost)} koin, -30 energi)`, 'bad');
+    if (S.energy <= 0) return finishDive(true);
+  }
+  renderDiveFrame();
+}
+
 function collectFind() {
   const d = S._dive; if (!d) return;
-  const pool = ARTIFACTS.filter(a => a.minDepth <= d.progress);
+  const pool = ALL_ARTIFACTS.filter(a => a.minDepth && a.minDepth <= d.progress);
   if (!pool.length) return;
   const pick = pool[pool.length - 1 - (Math.random() < S.luck / 2 ? 1 : 0)] || pool[pool.length - 1];
   const art = rnd(pool.filter(a => a.minDepth >= d.progress * 0.5)) || pick;
@@ -212,7 +273,7 @@ function sellPrice(art) {
   return Math.round(art.value * (1 + prestigeBonus()));
 }
 function sellItem(id, qty) {
-  const art = ARTIFACTS.find(a => a.id === id);
+  const art = ALL_ARTIFACTS.find(a => a.id === id);
   const have = S.inventory[id] || 0;
   const sell = Math.min(qty || have, have);
   if (!sell) return;
@@ -225,7 +286,7 @@ function sellItem(id, qty) {
 function sellAll() {
   let total = 0;
   for (const id in S.inventory) {
-    const art = ARTIFACTS.find(a => a.id === id);
+    const art = ALL_ARTIFACTS.find(a => a.id === id);
     total += sellPrice(art) * S.inventory[id];
     delete S.inventory[id];
   }
@@ -275,7 +336,8 @@ function renderDive() {
     const risk = z.depth > S.safeDepth;
     return `<div class="item-row">
       <div><b>${z.name}</b> <span class="muted">— ${z.depth} m</span>
-        ${risk ? '<span class="muted" style="color:var(--danger)"> ⚠ di luar zona aman</span>' : ''}</div>
+        ${risk ? '<span class="muted" style="color:var(--danger)"> ⚠ di luar zona aman</span>' : ''}
+        ${z.boss ? `<br><span class="muted" style="color:var(--danger)">☠ Boss: ${z.boss.name}</span>` : ''}</div>
       <button class="btn" onclick="startDive(${z.depth})">Selam</button>
     </div>`;
   }).join('') + `
@@ -285,7 +347,7 @@ function renderDive() {
 
 function renderMarket() {
   const el = $('inventory');
-  const rows = ARTIFACTS.filter(a => (S.inventory[a.id] || 0) > 0)
+  const rows = ALL_ARTIFACTS.filter(a => (S.inventory[a.id] || 0) > 0)
     .map(a => `<div class="item-row">
       <div><b>${a.name}</b> ×${S.inventory[a.id]} <span class="muted">(${fmt(a.value)} 🪙/pc)</span></div>
       <button class="btn secondary" onclick="sellItem('${a.id}')">Jual</button>

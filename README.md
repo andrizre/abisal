@@ -22,6 +22,6 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 ## Roadmap (dikembangkan harian via cronjob)
 - [x] Prestige / level penyelam
 - [x] Event spesial per zona & boss makhluk laut
-- [ ] Leaderboard lokal
+- [x] Leaderboard lokal
 - [ ] Migrasi localStorage → API backend (pemakaian schema.sql)
 - [ ] Ekspor/impor save (JSON download/upload)

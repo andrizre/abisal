@@ -28,6 +28,7 @@
     <button data-tab="market">🏪 Pasar</button>
     <button data-tab="upgrades">🔧 Upgrade</button>
     <button data-tab="log">📜 Jurnal</button>
+    <button data-tab="board">🏆 Peringkat</button>
   </nav>
 
   <!-- DIVE -->
@@ -73,6 +74,17 @@
     <div class="panel">
       <h2>Jurnal Penyelam</h2>
       <div id="log-list"></div>
+    </div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section id="tab-board" class="tab">
+    <div class="panel">
+      <h2>Papan Peringkat Penyelam</h2>
+      <p>Skor = koin total sepanjang karier + 500×level penyelam + kedalaman maks (m). Tersimpan otomatis di browser ini: snapshot harian saat tidur & tiap naik level.</p>
+      <div id="leaderboard-list"></div>
+      <button class="btn secondary" onclick="lbRecord()">📌 Catat Skor Sekarang</button>
+      <button class="btn danger" onclick="lbClear()">Hapus Riwayat</button>
     </div>
   </section>
 </main>

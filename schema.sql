@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS players (
   finds_per_dive INTEGER NOT NULL DEFAULT 2,
   safety        REAL NOT NULL DEFAULT 0,
   deepest       INTEGER NOT NULL DEFAULT 0,
+  earned        BIGINT NOT NULL DEFAULT 0,  -- total koin sepanjang karier (lifetime)
   prestige      INTEGER NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()

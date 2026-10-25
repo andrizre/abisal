@@ -4,6 +4,7 @@
 // ============================================================
 
 const SAVE_KEY = 'abisal_save_v1';
+const LB_KEY = 'abisal_leaderboard_v1';
 
 // ---------- Data ----------
 const ARTIFACTS = [
@@ -69,6 +70,7 @@ function defaultState(name) {
     luck: 0, findsPerDive: 2, safety: 0,
     inventory: {},          // artifactId -> qty
     deepest: 0,
+    earned: 0,              // total koin sepanjang karier (lifetime)
     log: [],
     prestige: 0,
   };
@@ -90,6 +92,8 @@ function addLog(text, cls = '') {
   S.log = S.log.slice(0, 120);
   renderLog();
 }
+
+function gainCoins(n) { S.coins += n; S.earned = (S.earned || 0) + n; }
 
 function upgradeCost(u) {
   const level = S.upgrades?.[u.id] || 0;
@@ -116,15 +120,62 @@ function canPrestige() {
 
 function doPrestige() {
   if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
-  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1 };
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest };
   const bonus = keep.prestige;
   S = defaultState(S.name);
   S.day = keep.day;
   S.prestige = keep.prestige;
   S.safeDepth += S.prestige * 20;        // bonus permanen: +20 m / level
   S.findsPerDive += S.prestige;          // bonus permanen: +1 temuan / level
+  S.earned = keep.earned;                // lifetime: tidak direset prestige
+  S.deepest = Math.max(S.deepest, keep.deepest);
   addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
-  save(); renderAll();
+  save();
+  lbAdd(S.name, S.prestige, keep.earned || 0, keep.deepest || 0); // catat skor prestasi
+  renderAll();
+}
+
+// ---------- Leaderboard lokal (localStorage) ----------
+// Skor = koin total sepanjang karier + 500×level + kedalaman maks.
+// Entri dicatat otomatis saat naik level & saat "Catat Skor" (juga otomatis tiap hari saat tidur).
+function lbScore(e) { return (e.earned || 0) + 500 * (e.prestige || 0) + (e.deepest || 0); }
+
+function lbAdd(name, prestige, earned, deepest) {
+  const entry = { name, prestige, earned, deepest, day: S.day, score: lbScore({ prestige, earned, deepest }), ts: Date.now() };
+  const lb = lbGet();
+  lb.push(entry);
+  lb.sort((a, b) => b.score - a.score);
+  localStorage.setItem(LB_KEY, JSON.stringify(lb.slice(0, 20)));
+  renderLeaderboard();
+}
+
+function lbGet() {
+  try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; }
+}
+
+function lbRecord() {
+  lbAdd(S.name, S.prestige, S.earned || 0, S.deepest);
+  addLog('Skor kamu dicatat ke papan peringkat.');
+  save();
+}
+
+function lbClear() {
+  if (!confirm('Hapus semua riwayat papan peringkat?')) return;
+  localStorage.removeItem(LB_KEY);
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const el = $('leaderboard-list'); if (!el) return;
+  const lb = lbGet();
+  el.innerHTML = lb.length ? lb.map((e, i) => {
+    const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+    return `<div class="item-row">
+      <div><b>${medal} ${e.name}</b> <span class="muted">Lv.${e.prestige} — hari ${e.day}</span><br>
+        <span class="muted">Koin total: ${fmt(e.earned)} · Kedalaman maks: ${fmt(e.deepest)} m</span></div>
+      <div><b>${fmt(e.score)}</b> <span class="muted">poin</span></div>
+    </div>`;
+  }).join('') : '<p class="muted">Belum ada skor. Naik level atau catat skormu!</p>';
 }
 
 // ---------- Dive ----------
@@ -195,7 +246,7 @@ function bossEncounter(boss) {
   const winChance = Math.min(0.9, 0.25 + power * 0.15);
   if (Math.random() < winChance) {
     S.inventory[boss.reward] = (S.inventory[boss.reward] || 0) + 1;
-    S.coins += boss.coin;
+    gainCoins(boss.coin);
     showEvent(`⚔️ <b>${boss.name}</b> bangkit dari gelap... dan KALAH! Kamu mengangkat <b>${boss.name}'s relic</b> + ${fmt(boss.coin)} koin.`, 'good');
     addLog(`⚔️ Mengalahkan boss <b>${boss.name}</b>! Hadiah: artefak spesial + ${fmt(boss.coin)} koin.`, 'good');
   } else {
@@ -265,6 +316,7 @@ function sleep() {
   S.day++;
   S.energy = S.maxEnergy;
   addLog('Kamu tidur di kabin. Energi penuh kembali.');
+  lbAdd(S.name, S.prestige, S.earned || 0, S.deepest); // snapshot harian ke leaderboard
   save(); renderAll();
 }
 
@@ -279,7 +331,7 @@ function sellItem(id, qty) {
   if (!sell) return;
   S.inventory[id] -= sell;
   const gained = sellPrice(art) * sell;
-  S.coins += gained;
+  gainCoins(gained);
   addLog(`Menjual ${sell}× ${art.name} (+${fmt(gained)} koin).`);
   save(); renderAll();
 }
@@ -290,7 +342,7 @@ function sellAll() {
     total += sellPrice(art) * S.inventory[id];
     delete S.inventory[id];
   }
-  if (total > 0) { S.coins += total; addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
+  if (total > 0) { gainCoins(total); addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
   save(); renderAll();
 }
 
@@ -308,7 +360,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;

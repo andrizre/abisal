@@ -76,7 +76,40 @@ function defaultState(name) {
   };
 }
 
-function save() { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }
+// ---------- Sinkronisasi cloud (opsional) ----------
+// Game tetap bisa dimainkan 100% offline (localStorage). Bila API server
+// (server.js) tersedia, state & skor disinkronkan otomatis (fire-and-forget).
+const API_BASE = ''; // same-origin saat dilayani server.js; kosong = matikan
+let CLOUD_OK = null; // null = belum dicek
+
+async function cloudCheck() {
+  try {
+    const r = await fetch(API_BASE + '/api/health', { signal: AbortSignal.timeout(2000) });
+    const j = await r.json();
+    CLOUD_OK = !!j.ok;
+  } catch { CLOUD_OK = false; }
+  renderCloud();
+}
+function cloudSave() {
+  if (!CLOUD_OK || !S) return;
+  fetch(API_BASE + '/api/save', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(S),
+  }).catch(() => {});
+}
+function cloudLb(entry) {
+  if (!CLOUD_OK) return;
+  fetch(API_BASE + '/api/leaderboard', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  }).catch(() => {});
+}
+function renderCloud() {
+  const el = $('cloud-status'); if (!el) return;
+  el.textContent = CLOUD_OK ? '☁ Tersinkron ke server' : '💾 Mode offline (localStorage)';
+}
+
+function save() { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); cloudSave(); }
 function load() {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { try { S = JSON.parse(raw); } catch { S = null; } }
@@ -146,6 +179,7 @@ function lbAdd(name, prestige, earned, deepest) {
   lb.push(entry);
   lb.sort((a, b) => b.score - a.score);
   localStorage.setItem(LB_KEY, JSON.stringify(lb.slice(0, 20)));
+  cloudLb(entry);
   renderLeaderboard();
 }
 
@@ -451,3 +485,4 @@ if (!S) {
   save();
 }
 renderAll();
+cloudCheck();

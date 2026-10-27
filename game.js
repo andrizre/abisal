@@ -457,6 +457,41 @@ function renderLog() {
     `<div class="log-entry"><b>Hari ${l.day}</b> — ${l.text}</div>`).join('');
 }
 
+// ---------- Ekspor / Impor save (JSON) ----------
+function exportSave() {
+  const data = { abisal: 1, exported: new Date().toISOString(), save: S, leaderboard: lbGet() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `abisal_save_${(S.name || 'penyelam').replace(/[^a-z0-9_-]+/gi, '_')}_${S.day}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  addLog('Data selam diekspor ke file JSON.', 'ok');
+  renderAll();
+}
+
+function importSave(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const ns = data.save || data; // terima file ekspor ABISAL atau state mentah
+      if (!ns || typeof ns !== 'object' || typeof ns.coins !== 'number' || !Array.isArray(ns.log)) {
+        throw new Error('struktur tidak dikenal');
+      }
+      S = ns;
+      if (Array.isArray(data.leaderboard)) {
+        localStorage.setItem(LB_KEY, JSON.stringify(data.leaderboard.slice(0, 20)));
+      }
+      addLog(`Data selam diimpor${data.exported ? ` (ekspor ${data.exported.slice(0, 10)})` : ''}. Selamat kembali, ${S.name}.`);
+      save(); renderAll();
+    } catch (e) {
+      alert('File tidak valid: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ---------- Boot ----------
 function newGame() {
   if (S && !confirm('Mulai ulang? Progress lama akan hilang.')) return;
@@ -469,6 +504,9 @@ function newGame() {
 
 $('btn-newgame').onclick = newGame;
 $('sell-all').onclick = sellAll;
+$('btn-export').onclick = exportSave;
+$('btn-import').onclick = () => $('import-file').click();
+$('import-file').onchange = e => { if (e.target.files[0]) { importSave(e.target.files[0]); e.target.value = ''; } };
 document.querySelectorAll('#tabs button').forEach(b => {
   b.onclick = () => {
     document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('active'));

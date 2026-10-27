@@ -24,4 +24,4 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 - [x] Event spesial per zona & boss makhluk laut
 - [x] Leaderboard lokal
 - [x] Migrasi localStorage → API backend (pemakaian schema.sql)
-- [ ] Ekspor/impor save (JSON download/upload)
+- [x] Ekspor/impor save (JSON download/upload)

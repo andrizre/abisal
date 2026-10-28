@@ -25,3 +25,4 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 - [x] Leaderboard lokal
 - [x] Migrasi localStorage → API backend (pemakaian schema.sql)
 - [x] Ekspor/impor save (JSON download/upload)
+- [x] Misi harian (3 misi acak/hari, klaim hadiah koin)

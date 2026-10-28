@@ -283,6 +283,7 @@ function bossEncounter(boss) {
     gainCoins(boss.coin);
     showEvent(`⚔️ <b>${boss.name}</b> bangkit dari gelap... dan KALAH! Kamu mengangkat <b>${boss.name}'s relic</b> + ${fmt(boss.coin)} koin.`, 'good');
     addLog(`⚔️ Mengalahkan boss <b>${boss.name}</b>! Hadiah: artefak spesial + ${fmt(boss.coin)} koin.`, 'good');
+    missionStats().boss++;
   } else {
     const lost = Math.round(boss.coin * 0.4);
     S.energy = Math.max(0, S.energy - 30);
@@ -301,6 +302,7 @@ function collectFind() {
   const pick = pool[pool.length - 1 - (Math.random() < S.luck / 2 ? 1 : 0)] || pool[pool.length - 1];
   const art = rnd(pool.filter(a => a.minDepth >= d.progress * 0.5)) || pick;
   d.finds.push(art.id);
+  missionStats().finds++;
   S.inventory[art.id] = (S.inventory[art.id] || 0) + 1;
   showEvent(`Kamu mengangkat: <b>${art.name}</b>`, 'good');
   renderDiveFrame();
@@ -320,6 +322,7 @@ function finishDive(forced = false) {
     msg = `Selam selesai di ${fmt(d.progress)} m — ${d.finds.length} temuan di tas.`;
   }
   delete S._dive;
+  if (!forced) missionStats().dives++;
   addLog(msg);
   $('dive-progress').classList.add('hidden');
   $('dive-info').classList.remove('hidden');
@@ -345,11 +348,62 @@ function showEvent(text, cls) {
   $('dive-events').prepend(div);
 }
 
+// ---------- Misi harian ----------
+const MISSION_POOL = [
+  { id: 'm_dive',   text: n => `Selesaikan ${n} selam`,            target: 3, reward: 60 },
+  { id: 'm_find',   text: n => `Angkat ${n} artefak`,              target: 5, reward: 80 },
+  { id: 'm_sell',   text: n => `Jual ${n} artefak di Pasar`,       target: 5, reward: 80 },
+  { id: 'm_earn',   text: n => `Kumpulkan ${n} koin dari penjualan`, target: 300, reward: 100 },
+  { id: 'm_boss',   text: () => 'Kalahkan 1 boss makhluk laut',    target: 1, reward: 250 },
+];
+
+function missionStats() { return S.mstats = S.mstats || { dives: 0, finds: 0, sold: 0, earned: 0, boss: 0 }; }
+
+function missionDay() { // daftar misi 3 acak (seeded per hari agar stabil)
+  const seed = S.day * 7919;
+  const pool = [...MISSION_POOL];
+  const out = [];
+  for (let i = 0; i < 3; i++) out.push(pool.splice((seed + i * 13) % pool.length, 1)[0]);
+  return out;
+}
+
+function mProg(m) { return missionStats()[m.id.slice(2)] || 0; }
+
+function claimMission(id) {
+  const ms = S.missions = S.missions || {};
+  if (ms[id]) return;
+  const m = S._todayMissions.find(x => x.id === id);
+  if (m && mProg(m) >= m.target) {
+    ms[id] = true;
+    gainCoins(m.reward);
+    addLog(`✅ Misi harian selesai: ${m.text(m.target)} (+${fmt(m.reward)} koin).`, 'ok');
+    save(); renderAll();
+  }
+}
+
+function renderMissions() {
+  const el = $('missions-list'); if (!el) return;
+  S.missions = S.missions || {};
+  S._todayMissions = missionDay();
+  el.innerHTML = S._todayMissions.map(m => {
+    const prog = Math.min(mProg(m), m.target);
+    const done = prog >= m.target;
+    const claimed = S.missions[m.id];
+    return `<div class="item-row">
+      <div><b>${m.text(m.target)}</b> ${claimed ? '<span class="muted" style="color:var(--ok)"> ✔ diklaim</span>' : ''}<br>
+        <span class="muted">${fmt(prog)} / ${fmt(m.target)} — hadiah ${fmt(m.reward)} 🪙</span></div>
+      ${done && !claimed ? `<button class="btn" onclick="claimMission('${m.id}')">Klaim</button>`
+        : `<span class="muted">${claimed ? '🎉' : '⏳'}</span>`}
+    </div>`;
+  }).join('');
+}
+
 // ---------- Sleep / new day ----------
 function sleep() {
   S.day++;
   S.energy = S.maxEnergy;
-  addLog('Kamu tidur di kabin. Energi penuh kembali.');
+  S.missions = {}; S.mstats = undefined; // misi harian baru
+  addLog('Kamu tidur di kabin. Energi penuh kembali — misi harian baru tersedia!');
   lbAdd(S.name, S.prestige, S.earned || 0, S.deepest); // snapshot harian ke leaderboard
   save(); renderAll();
 }
@@ -366,17 +420,19 @@ function sellItem(id, qty) {
   S.inventory[id] -= sell;
   const gained = sellPrice(art) * sell;
   gainCoins(gained);
+  missionStats().sold += sell; missionStats().earned += gained;
   addLog(`Menjual ${sell}× ${art.name} (+${fmt(gained)} koin).`);
   save(); renderAll();
 }
 function sellAll() {
-  let total = 0;
+  let total = 0, count = 0;
   for (const id in S.inventory) {
     const art = ALL_ARTIFACTS.find(a => a.id === id);
     total += sellPrice(art) * S.inventory[id];
+    count += S.inventory[id];
     delete S.inventory[id];
   }
-  if (total > 0) { gainCoins(total); addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
+  if (total > 0) { gainCoins(total); missionStats().sold += count; missionStats().earned += total; addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
   save(); renderAll();
 }
 
@@ -394,7 +450,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;

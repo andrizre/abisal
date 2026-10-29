@@ -73,6 +73,7 @@ function defaultState(name) {
     earned: 0,              // total koin sepanjang karier (lifetime)
     log: [],
     prestige: 0,
+    achievements: {},       // id lencana yang sudah diraih
   };
 }
 
@@ -153,7 +154,7 @@ function canPrestige() {
 
 function doPrestige() {
   if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
-  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest };
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {} };
   const bonus = keep.prestige;
   S = defaultState(S.name);
   S.day = keep.day;
@@ -162,9 +163,11 @@ function doPrestige() {
   S.findsPerDive += S.prestige;          // bonus permanen: +1 temuan / level
   S.earned = keep.earned;                // lifetime: tidak direset prestige
   S.deepest = Math.max(S.deepest, keep.deepest);
+  S.achievements = keep.achievements;       // lencana tidak hilang saat prestige
   addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
   save();
   lbAdd(S.name, S.prestige, keep.earned || 0, keep.deepest || 0); // catat skor prestasi
+  checkAchievements();
   renderAll();
 }
 
@@ -246,6 +249,7 @@ function diveTick() {
   const zone = zoneOf(d.targetDepth);
   d.progress += Math.min(d.targetDepth, 10 + Math.floor(Math.random() * 15));
   S.deepest = Math.max(S.deepest, d.progress);
+  checkAchievements();
 
   // Boss encounter: saat mencapai dasar zona yang punya boss, sekali per selam
   if (zone?.boss && !d.bossDone && d.progress >= d.targetDepth) {
@@ -324,6 +328,7 @@ function finishDive(forced = false) {
   delete S._dive;
   if (!forced) missionStats().dives++;
   addLog(msg);
+  checkAchievements();
   $('dive-progress').classList.add('hidden');
   $('dive-info').classList.remove('hidden');
   $('depth-options').classList.remove('hidden');
@@ -398,6 +403,47 @@ function renderMissions() {
   }).join('');
 }
 
+// ---------- Pencapaian / Lencana ----------
+const ACHIEVEMENTS = [
+  { id: 'a_first_dive',  icon: '🌊', name: 'Celah Pertama',      desc: 'Selesaikan 1 selam',               test: s => (s.mstats?.dives || 0) >= 1 },
+  { id: 'a_dive_25',     icon: '🤿', name: 'Veteran Palung',     desc: 'Selesaikan 25 selam',              test: s => (s.mstats?.dives || 0) >= 25 },
+  { id: 'a_find_50',     icon: '🧲', name: 'Kolektor Dasar',     desc: 'Angkat 50 artefak',                test: s => (s.mstats?.finds || 0) >= 50 },
+  { id: 'a_sell_100',    icon: '💰', name: 'Saudagar Pelabuhan', desc: 'Jual 100 artefak',                 test: s => (s.mstats?.sold || 0) >= 100 },
+  { id: 'a_earn_5000',   icon: '🏦', name: 'Kekayaan Abisal',    desc: 'Kumpulkan 5.000 koin sepanjang karier', test: s => (s.earned || 0) >= 5000 },
+  { id: 'a_boss',        icon: '⚔️', name: 'Pembunuh Iblis',     desc: 'Kalahkan 1 boss makhluk laut',     test: s => (s.mstats?.boss || 0) >= 1 },
+  { id: 'a_boss_10',     icon: '☠️', name: 'Teror Kedalaman',    desc: 'Kalahkan 10 boss makhluk laut',    test: s => (s.mstats?.boss || 0) >= 10 },
+  { id: 'a_depth_160',   icon: '🕯️', name: 'Sang Penembus Gelap', desc: 'Capai kedalaman 160 m',           test: s => (s.deepest || 0) >= 160 },
+  { id: 'a_depth_500',   icon: '🌑', name: 'Menyentuh Abisal',   desc: 'Capai kedalaman 500 m',            test: s => (s.deepest || 0) >= 500 },
+  { id: 'a_prestige',    icon: '⭐', name: 'Terlahir Kembali',   desc: 'Naik level penyelam pertama kali', test: s => (s.prestige || 0) >= 1 },
+  { id: 'a_prestige_3',  icon: '🌟', name: 'Legenda Laut Dalam', desc: 'Capai level penyelam 3',           test: s => (s.prestige || 0) >= 3 },
+  { id: 'a_day_10',      icon: '📅', name: 'Sepuluh Hari di Laut', desc: 'Bertahan sampai hari ke-10',     test: s => (s.day || 0) >= 10 },
+];
+
+function checkAchievements() {
+  const mine = S.achievements = S.achievements || {};
+  let unlocked = [];
+  for (const a of ACHIEVEMENTS) {
+    if (!mine[a.id] && a.test(S)) { mine[a.id] = true; unlocked.push(a); }
+  }
+  for (const a of unlocked) addLog(`🏅 Lencana diraih: <b>${a.icon} ${a.name}</b> — ${a.desc}.`, 'ok');
+  if (unlocked.length) save();
+  return unlocked;
+}
+
+function renderAchievements() {
+  const el = $('achievements-list'); if (!el) return;
+  const mine = S.achievements = S.achievements || {};
+  const total = ACHIEVEMENTS.length;
+  const got = ACHIEVEMENTS.filter(a => mine[a.id]).length;
+  el.innerHTML = `<p class="muted">${got} / ${total} lencana diraih</p>` + ACHIEVEMENTS.map(a => {
+    const has = mine[a.id];
+    return `<div class="item-row" style="${has ? '' : 'opacity:0.45'}">
+      <div><b>${a.icon} ${has ? a.name : '??? '}</b><br><span class="muted">${a.desc}</span></div>
+      ${has ? '<span style="color:var(--ok)">✔</span>' : '<span class="muted">🔒</span>'}
+    </div>`;
+  }).join('');
+}
+
 // ---------- Sleep / new day ----------
 function sleep() {
   S.day++;
@@ -405,6 +451,7 @@ function sleep() {
   S.missions = {}; S.mstats = undefined; // misi harian baru
   addLog('Kamu tidur di kabin. Energi penuh kembali — misi harian baru tersedia!');
   lbAdd(S.name, S.prestige, S.earned || 0, S.deepest); // snapshot harian ke leaderboard
+  checkAchievements();
   save(); renderAll();
 }
 
@@ -422,6 +469,7 @@ function sellItem(id, qty) {
   gainCoins(gained);
   missionStats().sold += sell; missionStats().earned += gained;
   addLog(`Menjual ${sell}× ${art.name} (+${fmt(gained)} koin).`);
+  checkAchievements();
   save(); renderAll();
 }
 function sellAll() {
@@ -432,7 +480,7 @@ function sellAll() {
     count += S.inventory[id];
     delete S.inventory[id];
   }
-  if (total > 0) { gainCoins(total); missionStats().sold += count; missionStats().earned += total; addLog(`Menjual semua barang (+${fmt(total)} koin).`); }
+  if (total > 0) { gainCoins(total); missionStats().sold += count; missionStats().earned += total; addLog(`Menjual semua barang (+${fmt(total)} koin).`); checkAchievements(); }
   save(); renderAll();
 }
 
@@ -450,7 +498,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;

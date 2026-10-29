@@ -29,6 +29,7 @@
     <button data-tab="upgrades">🔧 Upgrade</button>
     <button data-tab="log">📜 Jurnal</button>
     <button data-tab="missions">📋 Misi Harian</button>
+    <button data-tab="achievements">🏅 Lencana</button>
     <button data-tab="board">🏆 Peringkat</button>
   </nav>
 
@@ -87,6 +88,15 @@
     </div>
   </section>
 
+  <!-- ACHIEVEMENTS -->
+  <section id="tab-achievements" class="tab">
+    <div class="panel">
+      <h2>🏅 Lencana Penyelam</h2>
+      <p>Pencapaian karier permanen — tidak hilang saat Naik Level. Beberapa tersembunyi sampai diraih.</p>
+      <div id="achievements-list"></div>
+    </div>
+  </section>
+
   <!-- LEADERBOARD -->
   <section id="tab-board" class="tab">
     <div class="panel">
@@ -104,7 +114,7 @@
   <button id="btn-export" class="btn">⬇ Ekspor Save</button>
   <button id="btn-import" class="btn">⬆ Impor Save</button>
   <input type="file" id="import-file" accept="application/json,.json" class="hidden">
-  <span class="muted">ABISAL v0.2 — progress tersimpan otomatis di browser ini.</span>
+  <span class="muted">ABISAL v0.3 — progress tersimpan otomatis di browser ini.</span>
   <span id="cloud-status" class="muted"></span>
 </footer>
 

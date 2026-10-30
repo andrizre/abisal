@@ -27,3 +27,4 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 - [x] Ekspor/impor save (JSON download/upload)
 - [x] Misi harian (3 misi acak/hari, klaim hadiah koin)
 - [x] Pencapaian / lencana (12 badge permanen, tab Lencana)
+- [x] Museum koleksi (donasi set artefak → bonus permanen +8% jual & +2% luck per set)

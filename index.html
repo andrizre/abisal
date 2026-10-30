@@ -30,6 +30,7 @@
     <button data-tab="log">📜 Jurnal</button>
     <button data-tab="missions">📋 Misi Harian</button>
     <button data-tab="achievements">🏅 Lencana</button>
+    <button data-tab="museum">🏛️ Museum</button>
     <button data-tab="board">🏆 Peringkat</button>
   </nav>
 
@@ -97,6 +98,15 @@
     </div>
   </section>
 
+  <!-- MUSEUM -->
+  <section id="tab-museum" class="tab">
+    <div class="panel">
+      <h2>🏛️ Museum Pelabuhan Gelap</h2>
+      <p>Donasikan <b>1 contoh</b> dari setiap artefak dalam satu koleksi. Setiap koleksi lengkap memberi bonus <b>permanen</b>: +8% nilai jual &amp; +2% keberuntungan — dan tidak hilang saat Naik Level.</p>
+      <div id="museum-list"></div>
+    </div>
+  </section>
+
   <!-- LEADERBOARD -->
   <section id="tab-board" class="tab">
     <div class="panel">
@@ -114,7 +124,7 @@
   <button id="btn-export" class="btn">⬇ Ekspor Save</button>
   <button id="btn-import" class="btn">⬆ Impor Save</button>
   <input type="file" id="import-file" accept="application/json,.json" class="hidden">
-  <span class="muted">ABISAL v0.3 — progress tersimpan otomatis di browser ini.</span>
+  <span class="muted">ABISAL v0.4 — progress tersimpan otomatis di browser ini.</span>
   <span id="cloud-status" class="muted"></span>
 </footer>
 

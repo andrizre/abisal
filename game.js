@@ -57,6 +57,30 @@ const UPGRADES = [
 
 const ALL_ARTIFACTS = ARTIFACTS.concat(SPECIAL_ARTIFACTS);
 
+// ---------- Museum / Koleksi ----------
+// Donasikan 1 contoh tiap artefak dalam satu set ke Museum Pelabuhan Gelap.
+// Set yang selesai memberi bonus PERMANEN (tidak hilang saat Naik Level):
+// +8% nilai jual & +2% keberuntungan per set.
+const MUSEUM_SETS = [
+  { id: 'set_pesisir', name: 'Koleksi Pesisir', icon: '🐚',
+    items: ['koral_merah', 'koin_tenggelam'],
+    reward: 50 },
+  { id: 'set_kapal', name: 'Koleksi Kapal Karam', icon: '⛵',
+    items: ['amfora', 'mutiara', 'kompas_kapal', 'emas_ingot'],
+    reward: 300 },
+  { id: 'set_abisal', name: 'Koleksi Legenda Abisal', icon: '🌑',
+    items: ['ikon_air', 'teropong_sirine', 'jantung_abisal'],
+    reward: 1500 },
+  { id: 'set_boss', name: 'Koleksi Relik Sang Gelap', icon: '☠️',
+    items: ['topi_kapten', 'sisik_baja', 'mata_abisal'],
+    reward: 2500 },
+];
+
+function museumSets() { return MUSEUM_SETS.filter(x => (S.museum || {})[x.id]).length; }
+function museumBonus() { return museumSets() * 0.08; }   // +8% nilai jual / set
+function museumLuck()  { return museumSets() * 0.02; }   // +2% luck / set
+function luckTotal()   { return (S.luck || 0) + museumLuck(); }
+
 // ---------- State ----------
 let S = null;
 
@@ -154,7 +178,7 @@ function canPrestige() {
 
 function doPrestige() {
   if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
-  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {} };
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {}, museum: S.museum || {} };
   const bonus = keep.prestige;
   S = defaultState(S.name);
   S.day = keep.day;
@@ -164,6 +188,7 @@ function doPrestige() {
   S.earned = keep.earned;                // lifetime: tidak direset prestige
   S.deepest = Math.max(S.deepest, keep.deepest);
   S.achievements = keep.achievements;       // lencana tidak hilang saat prestige
+  S.museum = keep.museum;                    // koleksi museum tidak hilang saat prestige
   addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
   save();
   lbAdd(S.name, S.prestige, keep.earned || 0, keep.deepest || 0); // catat skor prestasi
@@ -261,13 +286,13 @@ function diveTick() {
   if (Math.random() < 0.35) {
     // 30% event spesial zona (jika ada), sisanya event umum
     if (zone && zone.specialGood && Math.random() < 0.3) {
-      const good = Math.random() < (0.55 + S.luck);
+      const good = Math.random() < (0.55 + luckTotal());
       showEvent(rnd(good ? zone.specialGood : zone.specialBad), good ? 'good' : 'bad');
       if (!good) {
         S.energy = Math.max(0, S.energy - 10);
         if (S.energy <= 0) return finishDive(true);
       }
-    } else if (Math.random() < (0.45 + S.luck)) {
+    } else if (Math.random() < (0.45 + luckTotal())) {
       showEvent(rnd(EVENTS_GOOD), 'good');
     } else {
       showEvent(rnd(EVENTS_BAD), 'bad');
@@ -303,7 +328,7 @@ function collectFind() {
   const d = S._dive; if (!d) return;
   const pool = ALL_ARTIFACTS.filter(a => a.minDepth && a.minDepth <= d.progress);
   if (!pool.length) return;
-  const pick = pool[pool.length - 1 - (Math.random() < S.luck / 2 ? 1 : 0)] || pool[pool.length - 1];
+  const pick = pool[pool.length - 1 - (Math.random() < luckTotal() / 2 ? 1 : 0)] || pool[pool.length - 1];
   const art = rnd(pool.filter(a => a.minDepth >= d.progress * 0.5)) || pick;
   d.finds.push(art.id);
   missionStats().finds++;
@@ -444,6 +469,42 @@ function renderAchievements() {
   }).join('');
 }
 
+// ---------- Museum: donasi set ----------
+function donateSet(id) {
+  const set = MUSEUM_SETS.find(x => x.id === id);
+  if (!set) return;
+  S.museum = S.museum || {};
+  if (S.museum[id]) return;
+  const missing = set.items.filter(a => (S.inventory[a] || 0) < 1);
+  if (missing.length) { alert('Kumpulkan 1 contoh dari setiap artefak di koleksi ini dulu.'); return; }
+  for (const a of set.items) S.inventory[a] -= 1;
+  S.museum[id] = true;
+  gainCoins(set.reward);
+  addLog(`🏛️ Donasi ke Museum: <b>${set.icon} ${set.name}</b> lengkap! +${fmt(set.reward)} koin, bonus permanen +8% jual & +2% keberuntungan.`, 'ok');
+  checkAchievements();
+  save(); renderAll();
+}
+
+function renderMuseum() {
+  const el = $('museum-list'); if (!el) return;
+  const done = museumSets();
+  el.innerHTML = `<p class="muted">${done} / ${MUSEUM_SETS.length} koleksi lengkap — bonus permanen: +${done * 8}% nilai jual, +${done * 2}% keberuntungan. Koleksi aman saat Naik Level.</p>` +
+    MUSEUM_SETS.map(set => {
+      const has = (S.museum || {})[set.id];
+      const rows = set.items.map(aid => {
+        const art = ALL_ARTIFACTS.find(a => a.id === aid);
+        const n = S.inventory[aid] || 0;
+        return `<li>${art.name} ${n >= 1 ? '✔' : `<span class="muted">(0 di tas)</span>`}</li>`;
+      }).join('');
+      return `<div class="item-row">
+        <div><b>${set.icon} ${set.name}</b><ul style="margin:4px 0 0 18px">${rows}</ul>
+          <span class="muted">Hadiah: ${fmt(set.reward)} 🪙 + bonus permanen</span></div>
+        ${has ? '<span style="color:var(--ok)">🏛️ Terdonasi</span>'
+          : `<button class="btn" onclick="donateSet('${set.id}')">Donasikan</button>`}
+      </div>`;
+    }).join('');
+}
+
 // ---------- Sleep / new day ----------
 function sleep() {
   S.day++;
@@ -457,7 +518,7 @@ function sleep() {
 
 // ---------- Market ----------
 function sellPrice(art) {
-  return Math.round(art.value * (1 + prestigeBonus()));
+  return Math.round(art.value * (1 + prestigeBonus() + museumBonus()));
 }
 function sellItem(id, qty) {
   const art = ALL_ARTIFACTS.find(a => a.id === id);
@@ -498,7 +559,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); renderMuseum(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;

@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 CREATE INDEX IF NOT EXISTS idx_journal_player ON journal(player_id, id DESC);
 
+-- Koleksi museum: set yang sudah didonasikan (bonus permanen)
+CREATE TABLE IF NOT EXISTS player_museum (
+  player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  set_id    TEXT NOT NULL,
+  donated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (player_id, set_id)
+);
+
 -- Pencatatan setiap selam (untuk statistik/balancing nanti)
 CREATE TABLE IF NOT EXISTS dives (
   id           BIGSERIAL PRIMARY KEY,

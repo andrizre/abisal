@@ -518,7 +518,31 @@ function sleep() {
 
 // ---------- Market ----------
 function sellPrice(art) {
-  return Math.round(art.value * (1 + prestigeBonus() + museumBonus()));
+  return Math.round(art.value * (1 + prestigeBonus() + museumBonus()) * marketMult(art.id));
+}
+
+// ---------- Pasar Gelap: harga fluktuatif harian ----------
+// Harga tiap artefak naik/turun -20%..+35% per hari (deterministik per hari,
+// sama untuk semua pemain). Dipengaruhi luckTotal: luck tinggi menggeser harga
+// ke arah lebih baik sedikit. Reset otomatis saat Tidur (hari baru).
+function marketSeed(artId, day) {
+  let h = 2166136261;
+  const str = artId + '#' + day;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967295; // 0..1
+}
+function marketMult(artId) {
+  const d = S.day || 1;
+  const r = marketSeed(artId, d);            // 0..1
+  const shift = Math.min(luckTotal(), 0.5) * 0.1; // luck sedikit menaikkan harga
+  const m = 0.8 + r * 0.55 + shift;          // 0.80..1.35 (+shift)
+  return m;
+}
+function marketTrend(artId) {
+  const m = marketMult(artId);
+  if (m > 1.05) return { cls: 'up', sym: '▲' };
+  if (m < 0.95) return { cls: 'down', sym: '▼' };
+  return { cls: '', sym: '•' };
 }
 function sellItem(id, qty) {
   const art = ALL_ARTIFACTS.find(a => a.id === id);
@@ -599,11 +623,18 @@ function renderDive() {
 function renderMarket() {
   const el = $('inventory');
   const rows = ALL_ARTIFACTS.filter(a => (S.inventory[a.id] || 0) > 0)
-    .map(a => `<div class="item-row">
-      <div><b>${a.name}</b> ×${S.inventory[a.id]} <span class="muted">(${fmt(a.value)} 🪙/pc)</span></div>
-      <button class="btn secondary" onclick="sellItem('${a.id}')">Jual</button>
-    </div>`);
-  el.innerHTML = rows.length ? rows.join('') : '<p class="muted">Tas kosong. Turunlah dan bawa sesuatu naik.</p>';
+    .map(a => { const t = marketTrend(a.id); return { a, t, qty: S.inventory[a.id] }; });
+  if (!rows.length) {
+    // Tetap tampilkan info pasar hari ini walau tas kosong
+    const hot = ALL_ARTIFACTS.map(a => ({ a, m: marketMult(a.id) })).sort((x, y) => y.m - x.m)[0];
+    el.innerHTML = `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>
+      <p class="muted">Harga tertinggi hari ini: <b>${hot.a.name}</b> (${fmt(sellPrice(hot.a))} 🪙/pc). Tas kosong. Turunlah dan bawa sesuatu naik.</p>`;
+    return;
+  }
+  const p = `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>`
+    + rows.map(r => `<div class="item-row"><div><b>${r.a.name}</b> ×${r.qty} <span class="mkt-${r.t.cls || 'flat'}">${r.t.sym}</span> <span class="muted">(${fmt(sellPrice(r.a))} 🪙/pc, dasar ${fmt(r.a.value)})</span></div>
+      <button class="btn ${r.t.sym === '▲' ? '' : 'secondary'}" onclick="sellItem('${r.a.id}')">Jual</button></div>`).join('');
+  el.innerHTML = p;
 }
 
 function renderUpgrades() {

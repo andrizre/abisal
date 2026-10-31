@@ -62,3 +62,8 @@ h1 { letter-spacing: 0.4em; margin: 0; color: var(--accent); }
 .log-entry b { color: var(--text); }
 
 footer { text-align: center; padding: 16px 0; }
+
+/* Pasar Gelap: tren harga harian */
+.mkt-up   { color: #22c55e; font-weight: bold; }
+.mkt-down { color: var(--danger); font-weight: bold; }
+.mkt-flat { color: var(--muted, #94a3b8); }

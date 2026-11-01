@@ -79,7 +79,23 @@ const MUSEUM_SETS = [
 function museumSets() { return MUSEUM_SETS.filter(x => (S.museum || {})[x.id]).length; }
 function museumBonus() { return museumSets() * 0.08; }   // +8% nilai jual / set
 function museumLuck()  { return museumSets() * 0.02; }   // +2% luck / set
-function luckTotal()   { return (S.luck || 0) + museumLuck(); }
+function luckTotal()   { return (S.luck || 0) + museumLuck() + weatherLuck(); }
+
+// ---------- Cuaca Laut (harian, deterministik) ----------
+// Cuaca berubah tiap hari (seeded, sama untuk semua pemain) dan memengaruhi
+// selam: Cerah = luck & risiko lebih baik; Badai = risiko melonjak & temuan
+// berkurang; Kabut = netral dengan sedikit hambatan. Diperbarui saat Tidur.
+const WEATHERS = [
+  { id: 'cerah', icon: '☀️', name: 'Laut Cerah',     luck: 0.10, riskMult: 0.85, desc: 'Arus tenang — peluang temuan bagus naik, risiko turun.' },
+  { id: 'normal', icon: '⛅', name: 'Cuaca Biasa',   luck: 0,    riskMult: 1.00, desc: 'Tidak ada yang istimewa. Hari kerja biasa.' },
+  { id: 'kabut', icon: '🌫️', name: 'Kabut Tebal',    luck: -0.05, riskMult: 1.15, desc: 'Jarak pandang pendek — risiko naik sedikit.' },
+  { id: 'badai', icon: '⛈️', name: 'Badai Abisal',   luck: -0.15, riskMult: 1.45, desc: 'Arus liar! Risiko selam melonjak, temuan sulit.' },
+];
+function weatherOf(day) {
+  return WEATHERS[Math.floor(marketSeed('cuaca', day || S.day) * WEATHERS.length)] || WEATHERS[1];
+}
+function weatherLuck()  { return (S._dive ? weatherOf(S._dive.day) : weatherOf(S.day)).luck; }
+function weatherRisk()  { return (S._dive ? weatherOf(S._dive.day) : weatherOf(S.day)).riskMult; }
 
 // ---------- State ----------
 let S = null;
@@ -257,8 +273,8 @@ const EVENTS_BAD = [
 function startDive(targetDepth) {
   if (S.energy < 10) { alert('Energi kurang! Tidur untuk mengisi ulang (lihat bawah).'); return; }
   const risky = targetDepth > S.safeDepth;
-  const risk = Math.min(0.7, Math.max(0.02, (targetDepth - S.safeDepth) / targetDepth) * (1 - S.safety));
-  S._dive = { targetDepth, risk, progress: 0, finds: [], energyStart: S.energy };
+  const risk = Math.min(0.85, Math.max(0.02, (targetDepth - S.safeDepth) / targetDepth) * (1 - S.safety) * weatherRisk());
+  S._dive = { targetDepth, risk, progress: 0, finds: [], energyStart: S.energy, day: S.day };
   $('dive-info').classList.add('hidden');
   $('depth-options').classList.add('hidden');
   $('dive-progress').classList.remove('hidden');
@@ -607,7 +623,8 @@ function renderPrestige() {
 function renderDive() {
   if (S._dive) return;
   const el = $('depth-options');
-  el.innerHTML = ZONES.map(z => {
+  const w = weatherOf(S.day);
+  el.innerHTML = `<div class="item-row"><div><b>${w.icon} ${w.name}</b><br><span class="muted">${w.desc}</span></div></div>` + ZONES.map(z => {
     const risk = z.depth > S.safeDepth;
     return `<div class="item-row">
       <div><b>${z.name}</b> <span class="muted">— ${z.depth} m</span>

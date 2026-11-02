@@ -29,4 +29,5 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 - [x] Pencapaian / lencana (12 badge permanen, tab Lencana)
 - [x] Museum koleksi (donasi set artefak → bonus permanen +8% jual & +2% luck per set)
 - [x] Cuaca Laut harian (deterministik per hari; memengaruhi luck selam & risiko kedalaman)
+- [x] Pesanan Khusus harian (kontrak pelanggan, premium +25%..+60%)
 - [x] Pasar Gelap: harga artefak fluktuatif harian (▲/▼/•, -20%..+35%, deterministik per hari, luck sedikit menaikkan harga)

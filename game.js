@@ -532,7 +532,37 @@ function sleep() {
   save(); renderAll();
 }
 
+
+// ---------- Pesanan Khusus harian (kontrak pelanggan) ----------
+// Satu pelanggan misterius memesan 1 jenis artefak per hari (deterministik,
+// sama untuk semua pemain). Serahkan jenis itu hari ini = harga premium
+// +25%..+60% di atas harga pasar. Pesanan berubah tiap hari (saat Tidur).
+function orderOf(day) {
+  const d = day || S.day;
+  const art = ALL_ARTIFACTS[Math.floor(marketSeed('pesanan' + d, d) * ALL_ARTIFACTS.length)];
+  const premium = 1.25 + marketSeed('pesanan_prem' + d, d) * 0.35; // 1.25..1.60
+  return { artId: art.id, premium };
+}
+function orderToday() { return orderOf(S.day); }
+function deliverOrder(id, qty) {
+  const o = orderToday();
+  if (id !== o.artId) return;
+  const art = ALL_ARTIFACTS.find(a => a.id === id);
+  const have = S.inventory[id] || 0;
+  const sell = Math.min(qty || have, have);
+  if (!sell) return;
+  S.inventory[id] -= sell;
+  const gained = Math.round(sellPrice(art) * o.premium) * sell;
+  gainCoins(gained);
+  missionStats().sold += sell; missionStats().earned += gained;
+  S.delivered = (S.delivered || 0) + sell;
+  addLog('Pesanan diserahkan: ' + sell + 'x ' + art.name + ' ke pelanggan misterius (+' + fmt(gained) + ' koin, premium x' + o.premium.toFixed(2) + ').', 'ok');
+  checkAchievements();
+  save(); renderAll();
+}
+
 // ---------- Market ----------
+
 function sellPrice(art) {
   return Math.round(art.value * (1 + prestigeBonus() + museumBonus()) * marketMult(art.id));
 }
@@ -639,16 +669,23 @@ function renderDive() {
 
 function renderMarket() {
   const el = $('inventory');
+  const o = orderToday();
+  const oart = ALL_ARTIFACTS.find(a => a.id === o.artId);
+  const oHave = S.inventory[o.artId] || 0;
+  const obanner = `<div class="item-row" style="border-left:3px solid var(--ok);padding-left:8px">
+    <div>\u{1F4E6} <b>Pesanan Khusus hari ini:</b> ${oart.name} (jumlah bebas) \u2014 premium <b>+${Math.round((o.premium - 1) * 100)}%</b> di atas pasar (${fmt(Math.round(sellPrice(oart) * o.premium))} \u{1F7EA}/pc)${oHave ? '' : ' <span class="muted">\u2014 belum ada di tas</span>'}</div>
+    ${oHave ? `<button class="btn" onclick="deliverOrder('${o.artId}')">Serahkan</button>` : '<span class="muted">\u23F3</span>'}
+  </div>`;
   const rows = ALL_ARTIFACTS.filter(a => (S.inventory[a.id] || 0) > 0)
     .map(a => { const t = marketTrend(a.id); return { a, t, qty: S.inventory[a.id] }; });
   if (!rows.length) {
     // Tetap tampilkan info pasar hari ini walau tas kosong
     const hot = ALL_ARTIFACTS.map(a => ({ a, m: marketMult(a.id) })).sort((x, y) => y.m - x.m)[0];
-    el.innerHTML = `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>
+    el.innerHTML = obanner + `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>
       <p class="muted">Harga tertinggi hari ini: <b>${hot.a.name}</b> (${fmt(sellPrice(hot.a))} 🪙/pc). Tas kosong. Turunlah dan bawa sesuatu naik.</p>`;
     return;
   }
-  const p = `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>`
+  const p = obanner + `<p class="muted">📈 Pasar Gelap hari ke-${S.day}: harga berubah tiap hari — jual saat harga sedang naik!</p>`
     + rows.map(r => `<div class="item-row"><div><b>${r.a.name}</b> ×${r.qty} <span class="mkt-${r.t.cls || 'flat'}">${r.t.sym}</span> <span class="muted">(${fmt(sellPrice(r.a))} 🪙/pc, dasar ${fmt(r.a.value)})</span></div>
       <button class="btn ${r.t.sym === '▲' ? '' : 'secondary'}" onclick="sellItem('${r.a.id}')">Jual</button></div>`).join('');
   el.innerHTML = p;

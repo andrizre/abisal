@@ -31,3 +31,4 @@ Pemetaan: state localStorage → tabel `players`, `inventory`, `player_upgrades`
 - [x] Cuaca Laut harian (deterministik per hari; memengaruhi luck selam & risiko kedalaman)
 - [x] Pesanan Khusus harian (kontrak pelanggan, premium +25%..+60%)
 - [x] Pasar Gelap: harga artefak fluktuatif harian (▲/▼/•, -20%..+35%, deterministik per hari, luck sedikit menaikkan harga)
+- [x] Kru Penyelam (rekrut 3 rekan bayaran: temuan otomatis, +5% luck, -10% risiko; upah harian saat Tidur, lepas bila tak terbayar)

@@ -79,7 +79,7 @@ const MUSEUM_SETS = [
 function museumSets() { return MUSEUM_SETS.filter(x => (S.museum || {})[x.id]).length; }
 function museumBonus() { return museumSets() * 0.08; }   // +8% nilai jual / set
 function museumLuck()  { return museumSets() * 0.02; }   // +2% luck / set
-function luckTotal()   { return (S.luck || 0) + museumLuck() + weatherLuck(); }
+function luckTotal()   { return (S.luck || 0) + museumLuck() + crewLuck() + weatherLuck(); }
 
 // ---------- Cuaca Laut (harian, deterministik) ----------
 // Cuaca berubah tiap hari (seeded, sama untuk semua pemain) dan memengaruhi
@@ -96,6 +96,61 @@ function weatherOf(day) {
 }
 function weatherLuck()  { return (S._dive ? weatherOf(S._dive.day) : weatherOf(S.day)).luck; }
 function weatherRisk()  { return (S._dive ? weatherOf(S._dive.day) : weatherOf(S.day)).riskMult; }
+
+// ---------- Kru Penyelam (rekan bayaran) ----------
+// Rekrut kru dengan biaya sekali; tiap malam (Tidur) mereka minta upah harian.
+// Kalau koin tidak cukup untuk upah, kru pamit pulang. Kru tidak hilang saat Naik Level.
+const CREW = [
+  { id: 'diver',  icon: '🤿', name: 'Penyelam Muda',  hire: 400,  wage: 30,
+    desc: '+1 temuan otomatis tiap selam', },
+  { id: 'nav',    icon: '🧭', name: 'Navigator Badai', hire: 700,  wage: 50,
+    desc: '+5% keberuntungan permanen', },
+  { id: 'medic',  icon: '⛑️', name: 'Tabib Laut',      hire: 900,  wage: 60,
+    desc: '-10% risiko kedalaman (dikalikan 0.9)', },
+];
+function crewHas(id) { return !!(S.crew || {})[id]; }
+function crewLuck() { return crewHas('nav') ? 0.05 : 0; }
+function crewRiskMult() { return crewHas('medic') ? 0.9 : 1; }
+function crewWages() { return CREW.filter(c => crewHas(c.id)).reduce((t, c) => t + c.wage, 0); }
+function hireCrew(id) {
+  const c = CREW.find(x => x.id === id);
+  if (!c || crewHas(id)) return;
+  if (S.coins < c.hire) { alert('Koin kurang untuk merekrut ' + c.name + '.'); return; }
+  S.coins -= c.hire;
+  S.crew = S.crew || {};
+  S.crew[id] = true;
+  addLog(`⚓ Kru baru direkrut: <b>${c.icon} ${c.name}</b> (${c.desc}). Upah ${fmt(c.wage)} koin/malam.`, 'ok');
+  checkAchievements();
+  save(); renderAll();
+}
+function payCrewWages() {
+  if (!S.crew) return;
+  const wages = crewWages();
+  if (!wages) return;
+  if (S.coins >= wages) {
+    S.coins -= wages;
+    addLog(`⚓ Upah kru dibayar: -${fmt(wages)} koin.`);
+  } else {
+    const gone = CREW.filter(c => crewHas(c.id));
+    S.crew = {};
+    addLog(`⚓ Koin tidak cukup untuk upah kru (${fmt(wages)}). ${gone.map(c => c.name).join(', ')} pamit pulang…`, 'bad');
+  }
+}
+function hireUI(id) { return hireCrew(id); }
+function renderCrew() {
+  const el = $('crew-list'); if (!el) return;
+  S.crew = S.crew || {};
+  el.innerHTML = `<p class="muted">Rekan bayaran: upah dibayar otomatis tiap Tidur. Kru <b>tidak hilang</b> saat Naik Level — tapi lepas kalau upah tak terbayar. Upah kru sekarang: ${fmt(crewWages())} 🪙/malam.</p>` +
+    CREW.map(c => {
+      const has = crewHas(c.id);
+      return `<div class="item-row">
+        <div><b>${c.icon} ${c.name}</b> ${has ? '<span style="color:var(--ok)">✔ di kru</span>' : ''}<br>
+          <span class="muted">${c.desc} — rekrut ${fmt(c.hire)} 🪙, upah ${fmt(c.wage)} 🪙/malam</span></div>
+        ${has ? '<span class="muted">⚓</span>'
+          : `<button class="btn ${S.coins >= c.hire ? '' : 'secondary'}" onclick="hireUI('${c.id}')" ${S.coins >= c.hire ? '' : 'disabled'}>Rekrut</button>`}
+      </div>`;
+    }).join('');
+}
 
 // ---------- State ----------
 let S = null;
@@ -114,6 +169,7 @@ function defaultState(name) {
     log: [],
     prestige: 0,
     achievements: {},       // id lencana yang sudah diraih
+    crew: {},               // kru penyelam yang direkrut
   };
 }
 
@@ -194,7 +250,7 @@ function canPrestige() {
 
 function doPrestige() {
   if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
-  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {}, museum: S.museum || {} };
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {}, museum: S.museum || {}, crew: S.crew || {} };
   const bonus = keep.prestige;
   S = defaultState(S.name);
   S.day = keep.day;
@@ -205,6 +261,7 @@ function doPrestige() {
   S.deepest = Math.max(S.deepest, keep.deepest);
   S.achievements = keep.achievements;       // lencana tidak hilang saat prestige
   S.museum = keep.museum;                    // koleksi museum tidak hilang saat prestige
+  S.crew = keep.crew;                        // kru tidak hilang saat prestige
   addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
   save();
   lbAdd(S.name, S.prestige, keep.earned || 0, keep.deepest || 0); // catat skor prestasi
@@ -273,7 +330,7 @@ const EVENTS_BAD = [
 function startDive(targetDepth) {
   if (S.energy < 10) { alert('Energi kurang! Tidur untuk mengisi ulang (lihat bawah).'); return; }
   const risky = targetDepth > S.safeDepth;
-  const risk = Math.min(0.85, Math.max(0.02, (targetDepth - S.safeDepth) / targetDepth) * (1 - S.safety) * weatherRisk());
+  const risk = Math.min(0.85, Math.max(0.02, (targetDepth - S.safeDepth) / targetDepth) * (1 - S.safety) * weatherRisk() * crewRiskMult());
   S._dive = { targetDepth, risk, progress: 0, finds: [], energyStart: S.energy, day: S.day };
   $('dive-info').classList.add('hidden');
   $('depth-options').classList.add('hidden');
@@ -291,6 +348,18 @@ function diveTick() {
   d.progress += Math.min(d.targetDepth, 10 + Math.floor(Math.random() * 15));
   S.deepest = Math.max(S.deepest, d.progress);
   checkAchievements();
+  // Kru "Penyelam Muda": temuan otomatis sekali per selam, setelah turun pertama
+  if (crewHas('diver') && !d.diverFound) {
+    d.diverFound = true;
+    const pool = ALL_ARTIFACTS.filter(a => a.minDepth && a.minDepth <= d.progress);
+    if (pool.length) {
+      const art = pool[Math.floor(Math.random() * pool.length)];
+      d.finds.push(art.id);
+      missionStats().finds++;
+      S.inventory[art.id] = (S.inventory[art.id] || 0) + 1;
+      showEvent(`🤿 Penyelam Mudamu mengangkat: <b>${art.name}</b>`, 'good');
+    }
+  }
 
   // Boss encounter: saat mencapai dasar zona yang punya boss, sekali per selam
   if (zone?.boss && !d.bossDone && d.progress >= d.targetDepth) {
@@ -525,6 +594,7 @@ function renderMuseum() {
 function sleep() {
   S.day++;
   S.energy = S.maxEnergy;
+  payCrewWages(); // kru dibayar (atau pamit) tiap malam
   S.missions = {}; S.mstats = undefined; // misi harian baru
   addLog('Kamu tidur di kabin. Energi penuh kembali — misi harian baru tersedia!');
   lbAdd(S.name, S.prestige, S.earned || 0, S.deepest); // snapshot harian ke leaderboard
@@ -629,7 +699,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); renderMuseum(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); renderMuseum(); renderCrew(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;

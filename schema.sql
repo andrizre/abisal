@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS players (
   safety        REAL NOT NULL DEFAULT 0,
   deepest       INTEGER NOT NULL DEFAULT 0,
   earned        BIGINT NOT NULL DEFAULT 0,  -- total koin sepanjang karier (lifetime)
+  map_fragments INTEGER NOT NULL DEFAULT 0, -- fragmen peta harta karun (0..3)
   prestige      INTEGER NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -96,3 +97,6 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Artefak spesial (hadiah boss) tidak punya kedalaman minimum — hanya dari boss.
 ALTER TABLE artifacts ALTER COLUMN min_depth DROP NOT NULL;
+
+-- Migrasi aman untuk database yang sudah terisi sebelumnya
+ALTER TABLE players ADD COLUMN IF NOT EXISTS map_fragments INTEGER NOT NULL DEFAULT 0;

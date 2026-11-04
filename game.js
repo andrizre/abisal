@@ -170,6 +170,7 @@ function defaultState(name) {
     prestige: 0,
     achievements: {},       // id lencana yang sudah diraih
     crew: {},               // kru penyelam yang direkrut
+    mapFragments: 0,        // fragmen peta harta karun (0..3)
   };
 }
 
@@ -250,7 +251,7 @@ function canPrestige() {
 
 function doPrestige() {
   if (!canPrestige()) { alert(`Butuh ${fmt(prestigeReq())} koin untuk naik level penyelam.`); return; }
-  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {}, museum: S.museum || {}, crew: S.crew || {} };
+  const keep = { name: S.name, day: S.day, prestige: S.prestige + 1, earned: S.earned || 0, deepest: S.deepest, achievements: S.achievements || {}, museum: S.museum || {}, crew: S.crew || {}, mapFragments: S.mapFragments || 0 };
   const bonus = keep.prestige;
   S = defaultState(S.name);
   S.day = keep.day;
@@ -262,6 +263,7 @@ function doPrestige() {
   S.achievements = keep.achievements;       // lencana tidak hilang saat prestige
   S.museum = keep.museum;                    // koleksi museum tidak hilang saat prestige
   S.crew = keep.crew;                        // kru tidak hilang saat prestige
+  S.mapFragments = keep.mapFragments;        // fragmen peta tidak hilang saat prestige
   addLog(`🌊 <b>NAIK LEVEL PENYELAM ${bonus}!</b> Kamu kembali ke Pelabuhan Gelap lebih perkasa: +${bonus * 10}% nilai jual, +${bonus * 20} m zona aman, +${bonus} temuan per selam.`);
   save();
   lbAdd(S.name, S.prestige, keep.earned || 0, keep.deepest || 0); // catat skor prestasi
@@ -365,6 +367,17 @@ function diveTick() {
   if (zone?.boss && !d.bossDone && d.progress >= d.targetDepth) {
     d.bossDone = true;
     return bossEncounter(zone.boss);
+  }
+
+  // Peta harta karun: peluang kecil menemukan fragmen tiap tick (luck menaikkan)
+  if ((S.mapFragments || 0) < 3 && Math.random() < 0.06 + luckTotal() * 0.15) {
+    S.mapFragments = (S.mapFragments || 0) + 1;
+    if (S.mapFragments >= 3) {
+      showEvent('🗺️ <b>Fragmen peta ketiga ditemukan!</b> Peta Harta Karun lengkap — gali harta di tab 🗺️ Peta!', 'good');
+      addLog('🗺️ Peta Harta Karun lengkap! Siap gali harta karun.', 'good');
+    } else {
+      showEvent(`🗺️ Fragmen Peta Harta Karun ditemukan (${S.mapFragments}/3)!`, 'good');
+    }
   }
 
   // chance of event each tick
@@ -631,6 +644,36 @@ function deliverOrder(id, qty) {
   save(); renderAll();
 }
 
+// ---------- Peta Harta Karun ----------
+const TREASURE_DIG_COST = 30;      // energi untuk menggali
+function digTreasure() {
+  if ((S.mapFragments || 0) < 3) return;
+  if (S.energy < TREASURE_DIG_COST) { alert('Energi kurang untuk menggali (butuh ' + TREASURE_DIG_COST + ').'); return; }
+  S.energy -= TREASURE_DIG_COST;
+  S.mapFragments = 0;
+  // Hadiah deterministik-beruntung: koin dasar + artefak berharga sesuai kedalaman terdalam
+  const base = 400 + S.deepest * 3;
+  const coins = Math.round(base * (1 + prestigeBonus() + museumBonus()) * (1 + luckTotal()));
+  gainCoins(coins);
+  const pool = ALL_ARTIFACTS.filter(a => S.deepest >= (a.minDepth || 0));
+  const art = pool[pool.length - 1];
+  if (art) S.inventory[art.id] = (S.inventory[art.id] || 0) + 1;
+  addLog('🏝️ Harta karun digali! +' + fmt(coins) + ' koin' + (art ? ' + 1x ' + art.name : '') + '.', 'ok');
+  checkAchievements();
+  save(); renderAll();
+}
+function renderTreasure() {
+  const el = $('treasure-list'); if (!el) return;
+  const n = S.mapFragments || 0;
+  const bar = '🗺️'.repeat(n) + '<span class="muted">' + '·'.repeat(3 - n) + '</span>';
+  const ready = n >= 3;
+  el.innerHTML = `<div class="item-row">
+    <div><b>Fragmen peta: ${bar} (${n}/3)</b><br>
+      <span class="muted">Temukan fragmen saat menyelam (keberuntungan menaikkan peluang). Kumpulkan 3 lalu gali: hadiah koin besar + artefak termahal sesuai kedalaman maks-mu. Gali butuh ${TREASURE_DIG_COST} energi.</span></div>
+    ${ready ? `<button class="btn" onclick="digTreasure()">⛏️ Gali!</button>` : '<span class="muted">⏳</span>'}
+  </div>`;
+}
+
 // ---------- Market ----------
 
 function sellPrice(art) {
@@ -699,7 +742,7 @@ function buyUpgrade(id) {
 }
 
 // ---------- Rendering ----------
-function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); renderMuseum(); renderCrew(); }
+function renderAll() { renderStatus(); renderDive(); renderMarket(); renderUpgrades(); renderLog(); renderPrestige(); renderLeaderboard(); renderMissions(); renderAchievements(); renderMuseum(); renderCrew(); renderTreasure(); }
 
 function renderStatus() {
   $('st-name').textContent = S.name;
